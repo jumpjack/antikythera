@@ -1,3 +1,9 @@
+Just a fix of original repo to fix the bug which prevented loading, to use light theme,  and to use standard pan/zoom mechanism.
+
+
+---------------
+
+
 # Antikythera Mechanism 3D Explorer
 
 This project provides an interactive three-dimensional reconstruction of the Antikythera mechanism. The visualization is built with [three.js](https://threejs.org/) and is driven by gear metadata distilled from published reconstructions by Price (1974) and Freeth et al. (2006, 2014). It is designed as a foundation for future immersive (VR) exploration of the ancient computer.
