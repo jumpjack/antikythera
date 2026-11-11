@@ -52,6 +52,10 @@ renderer.setSize(container.clientWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.xr.enabled = true;
 container.appendChild(renderer.domElement);
+
+// Prevent the browser context menu so right-drag can be used for panning.
+renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
+
 const vrButton = VRButton.createButton(renderer);
 document.body.appendChild(vrButton);
 
@@ -68,7 +72,8 @@ renderer.xr.addEventListener("sessionend", () => {
 });
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05070b);
+// Light theme background
+scene.background = new THREE.Color(0xf2f4f7);
 
 const camera = new THREE.PerspectiveCamera(
   40,
@@ -89,26 +94,40 @@ controls.dampingFactor = 0.06;
 controls.minDistance = 120;
 controls.maxDistance = 1200;
 controls.target.set(-180 * scale, 0, 0);
+// Classic mouse mapping: left = orbit, middle = zoom, right = pan.
+controls.enableRotate = true;
+controls.enableZoom = true;
+controls.enablePan = true;
+controls.mouseButtons = {
+  LEFT: THREE.MOUSE.ROTATE,
+  MIDDLE: THREE.MOUSE.DOLLY,
+  RIGHT: THREE.MOUSE.PAN,
+};
+controls.touches = {
+  ONE: THREE.TOUCH.ROTATE,
+  TWO: THREE.TOUCH.DOLLY_PAN,
+};
 
-const ambient = new THREE.AmbientLight(0x3c4250, 0.8);
+// Lighting tuned for a light background.
+const ambient = new THREE.AmbientLight(0xffffff, 0.85);
 scene.add(ambient);
 
-const keyLight = new THREE.DirectionalLight(0xfce8c3, 0.8);
+const keyLight = new THREE.DirectionalLight(0xfff6e0, 1.0);
 keyLight.position.set(260, 340, 220);
 keyLight.castShadow = true;
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight(0x4c6ef5, 0.45);
+const rimLight = new THREE.DirectionalLight(0x8ba4ff, 0.35);
 rimLight.position.set(-260, -180, 360);
 scene.add(rimLight);
 
 const floorGeometry = new THREE.CircleGeometry(640 * scale, 96);
 const floorMaterial = new THREE.MeshStandardMaterial({
-  color: 0x10131c,
+  color: 0xb0b5bd,
   metalness: 0.2,
   roughness: 0.9,
   transparent: true,
-  opacity: 0.45,
+  opacity: 0.35,
 });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotateX(-Math.PI / 2);
@@ -320,6 +339,12 @@ gearSystem.togglePause(isPaused);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
+// Track pointerdown to distinguish click-selection from drag-orbit/pan.
+let pointerDownPos = { x: 0, y: 0 };
+renderer.domElement.addEventListener("pointerdown", (event) => {
+  pointerDownPos = { x: event.clientX, y: event.clientY };
+});
+
 renderer.domElement.addEventListener("pointermove", (event) => {
   pointer.x = (event.offsetX / renderer.domElement.clientWidth) * 2 - 1;
   pointer.y = -(event.offsetY / renderer.domElement.clientHeight) * 2 + 1;
@@ -331,7 +356,13 @@ renderer.domElement.addEventListener("pointerleave", () => {
   tooltip.hidden = true;
 });
 
-renderer.domElement.addEventListener("click", () => {
+renderer.domElement.addEventListener("click", (event) => {
+  const dx = event.clientX - pointerDownPos.x;
+  const dy = event.clientY - pointerDownPos.y;
+  if (Math.hypot(dx, dy) > 5) {
+    // It was a drag (orbit or pan), don't select.
+    return;
+  }
   if (hoveredGear) {
     focusOnGear(hoveredGear);
     setSelectedGear(hoveredGear);
@@ -917,7 +948,8 @@ function createAxisLabel(text) {
   const context = canvas.getContext("2d");
   context.clearRect(0, 0, size, size);
   context.font = "28px 'Segoe UI', sans-serif";
-  context.fillStyle = "rgba(255, 209, 102, 0.92)";
+  // Dark label for readability on a light background
+  context.fillStyle = "rgba(120, 60, 10, 0.95)";
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillText(text, size / 2, size / 2);
@@ -962,7 +994,7 @@ function createSolarSystem(scale) {
   planetData.forEach(p => {
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(p.distance * scale, 0.5 * scale, 16, 100),
-      new THREE.MeshStandardMaterial({ color: 0x444444 }),
+      new THREE.MeshStandardMaterial({ color: 0x9aa0a8 }),
     );
     ring.rotation.x = Math.PI / 2;
     solarSystemGroup.add(ring);
