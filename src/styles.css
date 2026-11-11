@@ -1,15 +1,15 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
   --panel-width: min(420px, 32vw);
-  --panel-background: rgba(15, 18, 24, 0.88);
-  --panel-border: rgba(255, 255, 255, 0.12);
-  --accent: #ffd166;
-  --text-muted: rgba(235, 235, 245, 0.6);
-  --text-strong: rgba(255, 255, 255, 0.92);
+  --panel-background: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(0, 0, 0, 0.12);
+  --accent: #b45309;
+  --text-muted: rgba(60, 60, 70, 0.65);
+  --text-strong: rgba(20, 20, 25, 0.92);
 }
 
 * {
@@ -18,7 +18,7 @@
 
 body {
   margin: 0;
-  background: radial-gradient(circle at 20% 20%, #1a1f2b, #050609 70%);
+  background: #f4f5f7;
   color: var(--text-strong);
   min-height: 100vh;
   display: flex;
@@ -110,7 +110,7 @@ button {
 
 button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 input[type="range"] {
@@ -122,7 +122,7 @@ select {
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
-  background: rgba(19, 23, 31, 0.92);
+  background: #ffffff;
   color: inherit;
 }
 
@@ -130,7 +130,7 @@ select {
   border: 1px solid var(--panel-border);
   border-radius: 18px;
   padding: 1rem;
-  background: rgba(12, 16, 24, 0.7);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 #gear-details h2 {
@@ -166,13 +166,13 @@ footer {
   position: fixed;
   padding: 0.3rem 0.6rem;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(20, 20, 25, 0.88);
   color: #fff;
   font-size: 0.8rem;
   pointer-events: none;
   transform: translate(-50%, -120%);
   white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   z-index: 100;
 }
 
@@ -198,7 +198,7 @@ footer {
     height: clamp(320px, 40vh, 420px);
     display: flex;
     flex-direction: column;
-    background: rgba(10, 12, 18, 0.96);
+    background: rgba(255, 255, 255, 0.97);
   }
 
   #canvas-container {
