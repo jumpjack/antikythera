@@ -53,48 +53,48 @@ renderer.shadowMap.enabled = true;
 renderer.xr.enabled = true;
 container.appendChild(renderer.domElement);
 
-// Prevent the browser context menu so right-drag can be used for panning.
+// Disabilita il menu contestuale: il tasto destro serve per il panning.
 renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault());
 
 const vrButton = VRButton.createButton(renderer);
 document.body.appendChild(vrButton);
 
-renderer.xr.addEventListener("sessionstart", () => {
-  dolly.position.set(-180 * scale, 1.6, 0);
-  document.getElementById("ui-panel").style.display = "none";
-});
-
-renderer.xr.addEventListener("sessionend", () => {
-  dolly.position.set(320, 220, 420);
-  camera.position.set(0, 1.6, 0);
-  controls.target.set(-180 * scale, 0, 0);
-  document.getElementById("ui-panel").style.display = "flex";
-});
-
 const scene = new THREE.Scene();
-// Light theme background
+// Tema chiaro
 scene.background = new THREE.Color(0xf2f4f7);
 
+// ---------------------------------------------------------------------------
+// CAMERA — vive direttamente nella scena (world space) per il desktop.
+// OrbitControls richiede che la camera NON abbia un genitore con transform,
+// altrimenti mescola coordinate locali e mondiali e i controlli impazziscono.
+// ---------------------------------------------------------------------------
 const camera = new THREE.PerspectiveCamera(
   40,
   container.clientWidth / window.innerHeight,
   0.1,
   4000,
 );
-camera.position.set(0, 1.6, 0); // Set position for VR
+camera.position.set(320, 220, 420);
+scene.add(camera);
 
+// Dolly usato SOLO in XR per spostare l'utente. Fuori dalla scena di default.
 const dolly = new THREE.Group();
-dolly.position.set(320, 220, 420);
-dolly.add(camera);
-scene.add(dolly);
 
+// ---------------------------------------------------------------------------
+// ORBIT CONTROLS — mappatura classica.
+//   tasto sinistro   → ruota
+//   tasto centrale   → zoom
+//   rotella          → zoom
+//   tasto destro     → panning
+//   un dito (touch)  → ruota
+//   due dita (touch) → zoom + pan
+// ---------------------------------------------------------------------------
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.06;
+controls.dampingFactor = 0.1;
 controls.minDistance = 120;
 controls.maxDistance = 1200;
 controls.target.set(-180 * scale, 0, 0);
-// Classic mouse mapping: left = orbit, middle = zoom, right = pan.
 controls.enableRotate = true;
 controls.enableZoom = true;
 controls.enablePan = true;
@@ -107,8 +107,50 @@ controls.touches = {
   ONE: THREE.TOUCH.ROTATE,
   TWO: THREE.TOUCH.DOLLY_PAN,
 };
+controls.update();
 
-// Lighting tuned for a light background.
+// ---------------------------------------------------------------------------
+// XR SESSION LIFECYCLE — reparenting della camera.
+// ---------------------------------------------------------------------------
+renderer.xr.addEventListener("sessionstart", () => {
+  // Disabilita OrbitControls: la camera ora segue la testa dell'utente.
+  controls.enabled = false;
+
+  // Sposta la camera sotto il dolly (che a sua volta entra nella scena).
+  scene.remove(camera);
+  dolly.add(camera);
+  scene.add(dolly);
+
+  // Posiziona utente e camera per la VR.
+  dolly.position.set(-180 * scale, 1.6, 0);
+  camera.position.set(0, 1.6, 0);
+  camera.quaternion.identity();
+
+  document.getElementById("ui-panel").style.display = "none";
+});
+
+renderer.xr.addEventListener("sessionend", () => {
+  // Riporta la camera nella scena (world space) per il desktop.
+  dolly.remove(camera);
+  scene.remove(dolly);
+  scene.add(camera);
+
+  // Ripristina la vista iniziale.
+  camera.position.set(320, 220, 420);
+  camera.quaternion.identity();
+  camera.up.set(0, 1, 0);
+
+  // Riattiva OrbitControls.
+  controls.target.set(-180 * scale, 0, 0);
+  controls.enabled = true;
+  controls.update();
+
+  document.getElementById("ui-panel").style.display = "flex";
+});
+
+// ---------------------------------------------------------------------------
+// Luci ricalibrate per sfondo chiaro
+// ---------------------------------------------------------------------------
 const ambient = new THREE.AmbientLight(0xffffff, 0.85);
 scene.add(ambient);
 
@@ -232,7 +274,6 @@ gears.forEach((gear) => {
   const { rim, hub, bore, toothMeshes } = mesh.userData;
   pickTargets.push(rim, hub, bore, ...toothMeshes);
 
-  // Create position label (hidden by default)
   const axis = axes.find(a => a.id === gear.axis);
   if (axis) {
     const label = createPositionLabel(gear, axis.position, gear.stack, scale);
@@ -241,13 +282,11 @@ gears.forEach((gear) => {
     positionLabels.set(gear.id, label);
   }
 
-  // Create angular momentum arrow (hidden by default)
   const arrow = createAngularMomentumArrow(gear, 1, scale);
   arrow.visible = false;
   mesh.add(arrow);
   angularMomentumArrows.set(gear.id, arrow);
 
-  // Create vertical stack indicator (hidden by default)
   const stackIndicator = createVerticalStackIndicator(mesh, axis.height, scale);
   if (stackIndicator) {
     stackIndicator.visible = false;
@@ -301,7 +340,6 @@ controller2.addEventListener("selectend", () => {
   isDragging = false;
 });
 
-
 const playToggle = document.getElementById("play-toggle");
 const speedControl = document.getElementById("speed-control");
 const dateInput = document.getElementById("date-input");
@@ -339,7 +377,7 @@ gearSystem.togglePause(isPaused);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-// Track pointerdown to distinguish click-selection from drag-orbit/pan.
+// Traccia il pointerdown per distinguere click-selezione da drag-orbita/pan.
 let pointerDownPos = { x: 0, y: 0 };
 renderer.domElement.addEventListener("pointerdown", (event) => {
   pointerDownPos = { x: event.clientX, y: event.clientY };
@@ -360,7 +398,7 @@ renderer.domElement.addEventListener("click", (event) => {
   const dx = event.clientX - pointerDownPos.x;
   const dy = event.clientY - pointerDownPos.y;
   if (Math.hypot(dx, dy) > 5) {
-    // It was a drag (orbit or pan), don't select.
+    // È stato un drag (orbita o pan): non selezionare.
     return;
   }
   if (hoveredGear) {
@@ -376,9 +414,8 @@ playToggle.addEventListener("click", () => {
   gearSystem.togglePause(isPaused);
   playToggle.textContent = isPaused ? "Play" : "Pause";
   if (!isPaused) {
-    // If we are playing, ensure the speed is not 0
     if (Number(speedControl.value) === 0) {
-      speedControl.value = "30.44"; // Default to 1 month/sec
+      speedControl.value = "30.44";
     }
   } else {
     speedControl.value = "0";
@@ -449,7 +486,6 @@ showCollisionDetectionCheckbox.addEventListener("change", () => {
   if (enabled) {
     updateCollisionDetection();
   } else {
-    // Remove collision highlighting
     highlightOverlappingGears(gearMeshes, []);
     if (collisionReportElement) {
       collisionReportElement.remove();
@@ -496,14 +532,11 @@ setDateBtn.addEventListener("click", () => {
   const targetDate = new Date(dateInput.value);
   if (isNaN(targetDate)) return;
 
-  // The mechanism's epoch is considered to be around 223 BCE for the Saros cycle.
-  // For simplicity, we'll use a more recent and easily calculable epoch.
   const epoch = new Date("2000-01-01");
   const millisecondsPerDay = 1000 * 60 * 60 * 24;
   const daysDifference = (targetDate - epoch) / millisecondsPerDay;
 
-  // The b1 gear completes one rotation per year (365 days).
-  const rotationPerDay = (2 * Math.PI) / 365.25; // Use 365.25 to account for leap years
+  const rotationPerDay = (2 * Math.PI) / 365.25;
   const targetAngle = daysDifference * rotationPerDay;
 
   gearSystem.setGearRotation("b1", targetAngle);
@@ -537,14 +570,12 @@ showTransferMatrixBtn.addEventListener("click", () => {
   content += `<div style="max-height: 400px; overflow: auto; font-family: monospace; font-size: 10px;">`;
   content += `<table style="border-collapse: collapse;">`;
 
-  // Header row
   content += `<tr><th></th>`;
   matrixData.gearIds.forEach((id) => {
     content += `<th style="padding: 2px; border: 1px solid #ccc;">${id}</th>`;
   });
   content += `</tr>`;
 
-  // Matrix rows
   matrixData.matrix.forEach((row, i) => {
     content += `<tr><th style="padding: 2px; border: 1px solid #ccc;">${matrixData.gearIds[i]}</th>`;
     row.forEach((val) => {
@@ -566,21 +597,17 @@ run3DValidationBtn.addEventListener("click", () => {
   console.clear();
   console.log("🔍 Running 3D Visualization Validation...\n");
 
-  // Collect current rotation data for direction validation
   const lastRotations = {};
   gearSystem.gears.forEach((gearEntry, id) => {
     lastRotations[id] = gearEntry.mesh.rotation.y;
   });
 
-  // Run validation
   const results = runFullVisualizationValidation(scene, lastRotations);
 
-  // Count totals
   const totalErrors = Object.values(results).reduce((sum, r) => sum + (r.errors?.length || 0), 0);
   const totalWarnings = Object.values(results).reduce((sum, r) => sum + (r.warnings?.length || 0), 0);
   const totalPassed = Object.values(results).reduce((sum, r) => sum + (r.passed?.length || 0), 0);
 
-  // Show user-friendly alert
   if (totalErrors === 0 && totalWarnings === 0) {
     alert(`✅ 3D Visualization Validation PASSED!\n\n${totalPassed} checks passed.\n\nCheck console for detailed report.`);
   } else if (totalErrors === 0) {
@@ -591,7 +618,6 @@ run3DValidationBtn.addEventListener("click", () => {
 });
 
 function showModal(title, content) {
-  // Create modal if it doesn't exist
   let modal = document.getElementById("math-modal");
   if (!modal) {
     modal = document.createElement("div");
@@ -670,10 +696,6 @@ function initialiseUI() {
     });
 }
 
-/**
- * Calculates the driver gear's speed based on the selected value
- * in the speed control dropdown and updates the gear system.
- */
 function updateAnimationSpeed() {
   const daysPerSecond = Number(speedControl.value);
   const rotationPerDay = (2 * Math.PI) / 365.25;
@@ -748,7 +770,9 @@ function focusOnGear(gearId) {
   const worldPosition = new THREE.Vector3();
   entry.mesh.getWorldPosition(worldPosition);
   controls.target.copy(worldPosition);
-  controls.update();
+  if (controls.enabled) {
+    controls.update();
+  }
 }
 
 function setDetails(gear) {
@@ -800,7 +824,7 @@ function handleController(controller) {
 }
 
 function handleDrag(controller) {
-  if (isDragging) {
+  if (isDragging && renderer.xr.isPresenting) {
     const currentMatrix = controller.matrixWorld;
     const delta = new THREE.Vector3().setFromMatrixPosition(currentMatrix).sub(new THREE.Vector3().setFromMatrixPosition(dragStartMatrix));
     dolly.position.sub(delta);
@@ -812,21 +836,17 @@ function updateCollisionDetection() {
   const collisions = detectGearCollisions(gearMeshes, axisGroups, scale);
   highlightOverlappingGears(gearMeshes, collisions);
 
-  // Remove old report if exists
   if (collisionReportElement) {
     collisionReportElement.remove();
   }
 
-  // Create new report
   collisionReportElement = createCollisionReport(collisions);
   document.body.appendChild(collisionReportElement);
 }
 
 function createAllConnectingRods() {
-  // Remove any existing rods first
   removeAllConnectingRods();
 
-  // Create rods for all connections
   connections.forEach((conn) => {
     const gear1 = gearMeshes.get(conn.from);
     const gear2 = gearMeshes.get(conn.to);
@@ -861,13 +881,11 @@ function updateAngularMomentumArrows() {
       const angularVelocity = rotation - (gearEntry.lastRotation || 0);
       gearEntry.lastRotation = rotation;
 
-      // Update arrow direction based on rotation direction
       if (Math.abs(angularVelocity) > 0.0001) {
         const direction = angularVelocity > 0 ? 1 : -1;
         arrow.position.y = 40 * scale * direction;
         arrow.rotation.x = direction > 0 ? 0 : Math.PI;
 
-        // Update color
         const color = direction > 0 ? 0x4488ff : 0xff4488;
         arrow.material.color.setHex(color);
         arrow.material.emissive.setHex(color);
@@ -877,16 +895,13 @@ function updateAngularMomentumArrows() {
 }
 
 function createLayerGrids() {
-  // Remove any existing grids first
   removeLayerGrids();
 
-  // Find unique stack heights
   const uniqueHeights = new Set();
   gears.forEach((gear) => {
     uniqueHeights.add(gear.stack);
   });
 
-  // Create a grid for each unique height
   uniqueHeights.forEach((height) => {
     const grid = createLayerGridPlane(height, scale);
     scene.add(grid);
@@ -906,10 +921,16 @@ function removeLayerGrids() {
 function animate(now) {
   const delta = (now - lastTime) / 1000;
   lastTime = now;
-  controls.update();
+
+  // Aggiorna OrbitControls solo quando è attivo (non in VR).
+  if (controls.enabled) {
+    controls.update();
+  }
+
   handleController(controller1);
   handleDrag(controller2);
   gearSystem.update(delta);
+
   dialPointerBindings.forEach((binding) => {
     const gearEntry = gearMeshes.get(binding.gearId);
     if (!gearEntry) {
@@ -918,6 +939,7 @@ function animate(now) {
     const baseRotation = (gearEntry.mesh.rotation.y ?? 0) * binding.ratio + binding.phase;
     binding.pivot.rotation.y = baseRotation;
   });
+
   celestialBodyBindings.forEach((binding) => {
     const gearEntry = gearMeshes.get(binding.gearId);
     if (!gearEntry) {
@@ -926,12 +948,10 @@ function animate(now) {
     binding.pivot.rotation.z = gearEntry.mesh.rotation.y;
   });
 
-  // Update angular momentum arrows if visible
   if (showAngularMomentumCheckbox.checked) {
     updateAngularMomentumArrows();
   }
 
-  // Update validation dashboard if visible
   if (showValidationDashboardCheckbox.checked) {
     updateValidationDashboard(gearMeshes, gearSystem, delta);
   }
@@ -948,7 +968,7 @@ function createAxisLabel(text) {
   const context = canvas.getContext("2d");
   context.clearRect(0, 0, size, size);
   context.font = "28px 'Segoe UI', sans-serif";
-  // Dark label for readability on a light background
+  // Etichetta scura per il tema chiaro
   context.fillStyle = "rgba(120, 60, 10, 0.95)";
   context.textAlign = "center";
   context.textBaseline = "middle";
@@ -966,12 +986,6 @@ function createAxisLabel(text) {
   return sprite;
 }
 
-/**
- * Creates the 3D visualization of the solar system, including the Sun,
- * planets, and their orbital rings.
- * @param {number} scale - The global scaling factor for the scene.
- * @returns {THREE.Group} A group containing the entire solar system visualization.
- */
 function createSolarSystem(scale) {
   const solarSystemGroup = new THREE.Group();
   solarSystemGroup.position.set(0, 150 * scale, 0);
